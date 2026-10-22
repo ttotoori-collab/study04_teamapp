@@ -177,6 +177,20 @@ def execute(sql, params=None):
     return _run(sql, params, "none")
 
 
+def execute_many(sql, params_seq):
+    """같은 질의를 여러 값으로 한 번에 보낸다.
+
+    명단 올리기처럼 행이 많을 때 쓴다. 한 줄씩 보내면 왕복이 많아 느리다.
+    """
+    params_seq = list(params_seq)
+    if not params_seq:
+        return 0
+    conn = get_conn()
+    with conn.cursor() as cur:
+        cur.executemany(sql, params_seq)
+        return cur.rowcount
+
+
 def transaction():
     """여러 질의를 한 묶음으로 처리할 때 쓴다.
 

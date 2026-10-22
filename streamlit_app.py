@@ -6,10 +6,14 @@ key 를 바꾸면 자동 채점 프로그램이 요소를 찾지 못해 -5점이
 이 앱은 API 키나 DB 주소를 화면에 출력하지 않는다 (6.3절 8번, -3점).
 """
 
+import traceback
+
+import psycopg
 import streamlit as st
 
 import auth
 import db
+import roster
 
 st.set_page_config(page_title="팀 편성", layout="wide")
 
@@ -32,6 +36,12 @@ def startup():
 
 def set_result(message):
     st.session_state["result_message"] = message
+
+
+def blocked_text(message):
+    """'막힘: ' 으로 시작하게 맞춘다."""
+    text = str(message)
+    return text if text.startswith("막힘") else f"막힘: {text}"
 
 
 def render_result():
@@ -93,9 +103,43 @@ def render_logout():
 # 학생 화면
 # ------------------------------------------------------------
 
+def render_teams(me):
+    """팀 목록. 팀 하나가 key = team_1, team_2, ... 인 container 다 (2.7절).
+
+    팀원의 이름과 역할이 보여야 한다. 이름은 명단 CSV의 name 그대로 쓴다.
+    """
+    teams = roster.teams_with_members()
+    if not teams:
+        st.caption("아직 팀이 없음. 관리자가 명단을 올리면 팀이 만들어진다.")
+        return
+
+    my_team_no = None
+    if me is not None and not me["is_admin"]:
+        for team in teams:
+            if any(m["student_id"] == me["id"] for m in team["members"]):
+                my_team_no = team["team_no"]
+                break
+
+    if me is not None and not me["is_admin"] and my_team_no is None:
+        st.write("아직 팀이 없음")
+
+    for team in teams:
+        with st.container(key=f"team_{team['team_no']}", border=True):
+            label = team["name"]
+            if team["team_no"] == my_team_no:
+                label += "  ← 내 팀"
+            st.markdown(f"**{label}**  ({len(team['members'])}/4명)")
+            if not team["members"]:
+                st.write("아직 팀원이 없음")
+            for m in team["members"]:
+                subs = ", ".join(m["sub_roles"]) if m["sub_roles"] else "없음"
+                st.write(f"{m['name']} — 주: {m['main_role']} / 보조: {subs}")
+
+
 def render_student(me):
     st.subheader("학생 화면")
-    st.caption("팀 목록과 지원·투표는 다음 단계에서 만든다.")
+    render_teams(me)
+    st.caption("지원과 투표는 다음 단계에서 만든다.")
 
 
 # ------------------------------------------------------------
@@ -108,14 +152,56 @@ def render_admin(me):
 
     st.subheader("관리자 화면")
 
+    # ---- 1. 명단 올리기 (과제 공고 2.6절) ----
     st.markdown("### 1. 명단 올리기")
-    st.caption("다음 단계에서 만든다.")
+    st.file_uploader(
+        "명단 CSV", type=["csv"], key="admin_roster_file"
+    )
+    st.number_input(
+        "팀 수",
+        min_value=roster.MIN_TEAM_COUNT,
+        max_value=roster.MAX_TEAM_COUNT,
+        value=4,
+        step=1,
+        key="admin_team_count",
+    )
+    if st.button("명단으로 처음 상태 만들기", key="admin_start"):
+        handle_admin_start(me)
 
+    # ---- 2. 마감과 배정 ----
     st.markdown("### 2. 마감과 배정")
     st.caption("다음 단계에서 만든다.")
 
+    # ---- 3. 현황 ----
     st.markdown("### 3. 현황")
-    st.caption("다음 단계에서 만든다.")
+    render_teams(me)
+
+
+def handle_admin_start(me):
+    """명단 CSV와 팀 수로 처음 상태를 만든다."""
+    try:
+        uploaded = st.session_state.get("admin_roster_file")
+        if uploaded is None:
+            raise roster.RosterError("명단 CSV 파일을 고르세요")
+        students = roster.parse_csv(uploaded.getvalue())
+        info = roster.apply_roster(
+            me, students, st.session_state.get("admin_team_count")
+        )
+        set_result(
+            f"승인: 명단 {info['students']}명, 팀 {info['teams']}개를 만듦"
+        )
+    except (roster.RosterError, auth.NotAdminError, ValueError) as e:
+        set_result(blocked_text(e))
+    except psycopg.Error:
+        # 예외 메시지에 DB 주소가 들어갈 수 있어 그대로 보여 주지 않는다 (6.3절 8번).
+        set_result("막힘: DB에 저장하지 못함")
+    except Exception:
+        # 어떤 오류가 나도 화면이 죽지 않게 한다.
+        # 화면이 죽으면 채점 프로그램이 그 자리에서 멈춘다.
+        # 자세한 내용은 서버 기록에만 남기고 화면에는 짧게만 보여 준다.
+        traceback.print_exc()
+        set_result("막힘: 명단을 처리하지 못함")
+    st.rerun()
 
 
 # ------------------------------------------------------------
