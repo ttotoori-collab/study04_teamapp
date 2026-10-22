@@ -1,0 +1,25 @@
+# 비밀 값 (절대 커밋하지 않음)
+.env
+.env.*
+!.env.example
+
+# 파이썬
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# 윈도우 / 에디터
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# 데이터베이스 파일
+*.sqlite3
+*.db
+
+# 교수님 제공 자료 (저장소에 올리지 않음)
+중간과제 공고.pdf
