@@ -35,7 +35,11 @@ ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 #   poolside/laguna-s-2.1:free                   4    1    25%    40.4초
 #   nvidia/nemotron-3.5-lightning:free           5    0     0%    -      <- 뺐음
 #
-# 1차는 성공률이 가장 높은 1번을 쓴다. 다만 104초가 걸려 120초 제한에 가깝다.
+# 1차는 **성공했을 때 빠른** 모델을 쓴다.
+# nemotron-3-ultra 가 성공률은 높았지만(1/1) 104초가 걸려 120초 제한에 너무
+# 가깝다. 한 번만 느려져도 끊기고 120초를 버리게 된다. 그래서 62.5초인
+# dots-studio 를 1차로, nemotron-3-ultra 를 2차로 둔다.
+#
 # 세 모델이 모두 120초를 다 쓰더라도 360초라서 10분 제한(감점 18번) 안에 든다.
 #
 # 뺀 모델: nvidia/nemotron-3.5-lightning:free
@@ -46,8 +50,8 @@ ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 #   google/gemma-4-31b-it:free               - HTTP 429 (공급자 한도)
 #   thinkingmachines/inkling-small:free      - HTTP 403 (agentic harness 전용)
 MODELS = (
-    "nvidia/nemotron-3-ultra-550b-a55b:free",
     "dots-studio/dots-3-note-preview:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
     "poolside/laguna-s-2.1:free",
 )
 
