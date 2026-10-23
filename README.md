@@ -7,9 +7,10 @@
 
 ## 1. 배포 주소
 
-```
-(배포 뒤 여기에 적기)
-```
+https://study04teamapp-ogbzsuzzuagzqdgrfoappsa.streamlit.app
+
+Streamlit Community Cloud 에 배포했다. 저장소의 기본 브랜치 `main`, 앱 파일
+`streamlit_app.py`, 파이썬 3.14 로 돌고 있다.
 
 ## 2. PRD와 구현 계획의 위치
 
@@ -56,8 +57,9 @@
 
 **근거**
 
-- [docs/AI호출기록.csv](docs/AI호출기록.csv) — 관리자 화면 "현황" 의 AI 호출 기록 표에서
-  내려받은 파일. 21행 모두 `tf_ai_logs` 테이블의 기록과 같다
+- [docs/AI호출기록.csv](docs/AI호출기록.csv) — 이 기록은 **로컬에서 연습 시나리오를
+  돌릴 때** 생겼고, 같은 Supabase DB를 쓰는 **배포된 앱의 관리자 화면 "현황"** 의
+  AI 호출 기록 표에서 내려받았다. 21행 모두 `tf_ai_logs` 테이블의 기록과 같다
 - [img/ai-call-log-with-title.png](img/ai-call-log-with-title.png) — 같은 표의 화면
 - [docs/작업기록.md](docs/작업기록.md) — 실패를 찾아 고친 과정
 
@@ -184,10 +186,27 @@
 
 - **발견한 단계**: 부록 1·2·3의 마지막 배정 단계(쉬움 6단계, 중간 11단계, 어려움 15단계)
   — [docs/테스트결과.md](docs/테스트결과.md)
-- **근거**: `tf_ai_logs` 의 모델별 집계 (호출 5 / 성공 0)
+- **근거 화면**: [img/ai-call-log-with-title.png](img/ai-call-log-with-title.png)
+  — 관리자 "현황" 의 AI 호출 기록 표. 1차(`lightning`)가 빈 응답을 내고 2차로 넘어가는
+  일이 16:10, 16:19 등에 되풀이된 것이 그대로 보인다.
+  원본 기록은 [docs/AI호출기록.csv](docs/AI호출기록.csv)
+- **근거 수치**: `tf_ai_logs` 모델별 집계 — `lightning` 호출 5번 / 성공 0번
 - **개선**: 성공 평균이 62.5초인 `dots-studio/dots-3-note-preview:free` 를 1차로 올리고
-  lightning 을 뺐다(커밋 `8cdee0e`). 다만 **남은 모델들도 성공률이 25~50%** 라
-  배정이 느려지는 문제 자체는 남아 있다. 무료 모델의 한계로 보인다.
+  lightning 을 뺐다(커밋 `8cdee0e`).
+- **개선 뒤 확인 화면**: [img/assign-status-success.png](img/assign-status-success.png)
+  — 바꾼 뒤 같은 명단(쉬움 8명, 팀 3개)으로 다시 배정해 보니
+  **1차 모델이 한 번에 검사 5가지를 통과**했다. 진행 안내에 적힌 그대로다.
+
+  ```
+  팀이 없는 학생 8명. 규칙을 지키는 배정이 있는지 확인하는 중
+  확인에 0.0초 걸림
+  규칙을 지키는 배정이 있음. AI에게 배정안을 받는다
+  1차 모델의 응답을 기다리는 중
+  1차 모델의 배정안이 검사 5가지를 모두 통과함
+  ```
+
+  다만 **남은 모델들도 성공률이 25~50%** 라 배정이 느려지는 문제 자체는 남아 있다.
+  무료 모델의 한계로 보인다. 한 번 성공했다고 해결된 것은 아니다.
 
 **문제 2 — 오류가 나면 화면에 오류 추적(Traceback)이 그대로 보였다**
 
@@ -218,6 +237,8 @@ line 224` 가 화면에 그대로 나왔다. 채점 중에 이러면 채점 프�
 | [img/admin-full.png](img/admin-full.png) | 관리자 화면 전체 (명단 올리기 / 마감과 배정 / 현황 3분할) |
 | [img/teams-confirmed.png](img/teams-confirmed.png) | 확정된 팀 구성 (팀원 이름과 주·보조 역할) |
 | [img/unassigned-empty.png](img/unassigned-empty.png) | 확정 뒤 "팀이 없는 학생" 이 비어 있음 |
+| [img/assign-status-success.png](img/assign-status-success.png) | 모델 순서를 바꾼 뒤 배정 진행 안내 — 1차 모델이 한 번에 통과 |
+| [img/admin-assign-full.png](img/admin-assign-full.png) | 그때의 관리자 화면 전체 |
 | [img/assign-status.png](img/assign-status.png) | 배정 진행 안내 영역 (새 세션이라 비어 있는 상태) |
 | [img/student-view.png](img/student-view.png) | 학생 화면 (팀 목록, 내 팀 표시, 역할 표시) |
 | [docs/AI호출기록.csv](docs/AI호출기록.csv) | AI 호출 기록 21행 (관리자 화면의 표에서 내려받음, `tf_ai_logs` 와 일치) |
