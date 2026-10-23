@@ -9,16 +9,22 @@ key 를 바꾸면 자동 채점 프로그램이 요소를 찾지 못해 -5점이
 """
 
 import traceback
+from datetime import timedelta, timezone
 
 import psycopg
 import streamlit as st
 
+import ai
+import assign
 import auth
 import db
 import roster
 import teamflow
 
 st.set_page_config(page_title="팀 편성", layout="wide")
+
+# 배포 서버의 시각은 UTC 다. 화면에 보여 줄 때는 한국 시각으로 바꾼다 (공고 4.4절).
+KST = timezone(timedelta(hours=9))
 
 
 # ------------------------------------------------------------
@@ -293,13 +299,111 @@ def render_admin(me):
         st.caption(f"모집이 마감됨 ({db.get_setting('closed_at', '')})")
     if st.button("모집 마감", key="admin_close", disabled=closed):
         run_action(teamflow.close_recruiting, me)
-    st.caption("AI 배정은 다음 단계에서 만든다.")
+
+    render_assign(me, closed)
 
     # ---- 3. 현황 ----
     st.markdown("### 3. 현황")
     render_teams(me)
     render_unassigned()
     render_pending_overview()
+    render_ai_logs()
+
+
+# ------------------------------------------------------------
+# AI 배정 (key = admin_assign, assign_status, admin_confirm)
+# ------------------------------------------------------------
+
+def lines_to_text(lines):
+    return "\n".join(f"- {line}" for line in lines)
+
+
+def do_assign(me, slot):
+    def on_progress(current):
+        # 기다리는 동안에도 화면에 바로 보이게 한다.
+        slot.markdown(lines_to_text(current))
+
+    result = assign.run_assignment(me, on_progress=on_progress)
+    st.session_state["assign_lines"] = result["lines"]
+    st.session_state["assignment"] = result.get("assignment") or None
+    st.session_state["assignment_by"] = result.get("by")
+    return result["message"]
+
+
+def do_confirm(me):
+    assignment = st.session_state.get("assignment")
+    message = assign.confirm_assignment(me, assignment or {})
+    if message.startswith("승인"):
+        st.session_state["assignment"] = None
+        st.session_state["assign_lines"] = list(
+            st.session_state.get("assign_lines", [])
+        ) + ["배정안을 확정해 DB에 저장함"]
+    return message
+
+
+def render_assign(me, closed):
+    """AI 배정. 진행 안내는 줄을 지우지 않고 쌓아서 보여 준다."""
+    # 배정 진행 안내 (key = assign_status)
+    box = st.container(key="assign_status", border=True)
+    slot = box.empty()
+    lines = st.session_state.get("assign_lines", [])
+    slot.markdown(lines_to_text(lines) if lines else "아직 배정하지 않음")
+
+    if st.button("AI 배정", key="admin_assign", disabled=not closed):
+        run_action(do_assign, me, slot)
+
+    if not closed:
+        st.caption("먼저 모집을 마감해야 배정할 수 있음")
+
+    assignment = st.session_state.get("assignment")
+    if assignment:
+        st.markdown("#### 배정안 (검사 5가지를 모두 통과함)")
+        st.caption(f"만든 곳: {st.session_state.get('assignment_by', '-')}")
+        st.dataframe(assign.assignment_table(assignment), hide_index=True)
+        if st.button("배정안 확정", key="admin_confirm"):
+            run_action(do_confirm, me)
+
+
+def render_ai_logs():
+    """AI 호출 기록 표. 시각은 한국 시각으로 보여 준다."""
+    rows = ai.recent_logs(30)
+    st.markdown("#### AI 호출 기록")
+    if not rows:
+        st.write("아직 없음")
+        return
+    st.dataframe(
+        [
+            {
+                "시각 (한국 시각)": kst_text(r["called_at"]),
+                "차수": attempt_text(r["attempt_no"]),
+                "모델 이름": r["model"] or "-",
+                "결과": r["outcome"],
+                "실패 이유": r["fail_reason"] or "-",
+                "걸린 시간": (
+                    f"{r['elapsed_ms'] / 1000:.1f}초" if r["elapsed_ms"] else "-"
+                ),
+            }
+            for r in rows
+        ],
+        hide_index=True,
+    )
+
+
+def kst_text(value):
+    """DB에는 UTC로 저장하고, 보여 줄 때만 한국 시각으로 바꾼다."""
+    if value is None:
+        return "-"
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(KST).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def attempt_text(attempt_no):
+    if attempt_no is None:
+        return "-"
+    if attempt_no >= 4:
+        return "앱 자체 배정"
+    return f"{attempt_no}차"
 
 
 def render_unassigned():

@@ -56,9 +56,14 @@ def _from_env_file(name):
         if key.strip() != name:
             continue
         value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-            value = value[1:-1]
-        return value or None
+        # 감싼 따옴표를 떼어 낸다.
+        # 한쪽 따옴표만 있어도(예: 닫는 따옴표를 빠뜨린 경우) 떼어 낸다.
+        # 키·주소·비밀번호에 따옴표가 들어가는 경우는 없으므로 안전하다.
+        if value[:1] in ("\"", "'"):
+            value = value[1:]
+        if value[-1:] in ("\"", "'"):
+            value = value[:-1]
+        return value.strip() or None
     return None
 
 

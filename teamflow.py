@@ -145,11 +145,15 @@ def _place_member(team_id, student_id):
     """
     for slot_no in range(1, db.TEAM_MAX + 1):
         try:
-            db.execute(
-                "insert into tf_members (team_id, slot_no, student_id)"
-                " values (%s, %s, %s)",
-                (team_id, slot_no, student_id),
-            )
+            # 넣기를 저장점(savepoint) 안에서 한다.
+            # 이렇게 해야 자리가 겹쳐 실패해도 그 시도만 되돌려지고,
+            # 바깥 묶음 처리(배정 확정 등)가 함께 중단되지 않는다.
+            with db.get_conn().transaction():
+                db.execute(
+                    "insert into tf_members (team_id, slot_no, student_id)"
+                    " values (%s, %s, %s)",
+                    (team_id, slot_no, student_id),
+                )
             return True
         except psycopg.errors.UniqueViolation as e:
             name = (e.diag.constraint_name or "").lower()
@@ -159,6 +163,11 @@ def _place_member(team_id, student_id):
             # 그 자리는 이미 찼다. 다음 자리를 본다.
             continue
     return False
+
+
+def place_member(team_id, student_id):
+    """빈 자리에 팀원을 넣는다 (배정 확정에서도 쓴다)."""
+    return _place_member(team_id, student_id)
 
 
 def _set_application(application_id, status, reason=None):
