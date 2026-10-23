@@ -1,0 +1,22 @@
+﻿시각 (한국 시각),차수,모델 이름,결과,실패 이유,걸린 시간
+2026-10-23 16:22:38,3차,dots-studio/dots-3-note-preview:free,성공,-,62.5초
+2026-10-23 16:21:36,2차,poolside/laguna-s-2.1:free,시간초과,120초가 지나 끊음(응답 받는 중),-
+2026-10-23 16:19:34,1차,nvidia/nemotron-3.5-lightning:free,빈 응답,빈 응답(생각에 길이를 다 씀),-
+2026-10-23 16:14:23,앱 자체 배정,-,성공,AI가 3차까지 실패해 앱이 스스로 배정함,-
+2026-10-23 16:14:23,3차,dots-studio/dots-3-note-preview:free,빈 응답,빈 응답(생각에 길이를 다 씀),-
+2026-10-23 16:12:57,2차,poolside/laguna-s-2.1:free,시간초과,120초가 지나 끊음(응답 받는 중),-
+2026-10-23 16:10:56,1차,nvidia/nemotron-3.5-lightning:free,빈 응답,빈 응답(생각에 길이를 다 씀),-
+2026-10-23 16:06:57,2차,poolside/laguna-s-2.1:free,성공,-,40.4초
+2026-10-23 16:06:16,1차,nvidia/nemotron-3.5-lightning:free,검사 실패,팀이 없는 학생이 아닌 사람이 6명 배정됨,83.8초
+2026-10-23 15:57:04,2차,poolside/laguna-s-2.1:free,시간초과,120초가 지나 끊음(응답 받는 중),-
+2026-10-23 15:56:37,1차,nvidia/nemotron-3.5-lightning:free,빈 응답,빈 응답(생각에 길이를 다 씀),-
+2026-10-23 15:55:03,1차,nvidia/nemotron-3.5-lightning:free,검사 실패,배정되지 않은 학생이 2명 있음; 팀이 없는 학생이 아닌 사람이 8명 배정됨,36.8초
+2026-10-23 15:12:51,1차,nvidia/nemotron-3-ultra-550b-a55b:free,성공,-,104.0초
+2026-10-23 15:10:28,앱 자체 배정,-,성공,AI가 3차까지 실패해 앱이 스스로 배정함,-
+2026-10-23 15:10:28,3차,fake-vendor/no-such-model-3:free,오류,HTTP 400,-
+2026-10-23 15:10:27,2차,fake-vendor/no-such-model-2:free,오류,HTTP 400,-
+2026-10-23 15:10:26,1차,fake-vendor/no-such-model-1:free,오류,HTTP 400,-
+2026-10-23 15:06:23,앱 자체 배정,-,성공,AI가 3차까지 실패해 앱이 스스로 배정함,-
+2026-10-23 15:06:23,3차,thinkingmachines/inkling:free,오류,HTTP 403,-
+2026-10-23 15:06:22,2차,google/gemma-4-31b-it:free,오류,HTTP 429 (사용량 한도),-
+2026-10-23 15:06:21,1차,nvidia/nemotron-3-super-120b-a12b:free,오류,HTTP 404,-
