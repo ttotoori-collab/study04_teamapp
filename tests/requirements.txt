@@ -1,0 +1,7 @@
+# 자동 테스트에만 필요한 패키지.
+# 배포에는 쓰지 않는다 (Streamlit Community Cloud 는 루트의 requirements.txt 만 읽는다).
+#
+# 쓰는 법:
+#   .venv\Scripts\python.exe -m pip install -r tests/requirements.txt
+#   .venv\Scripts\python.exe -m playwright install chromium
+playwright==1.64.1

@@ -1,0 +1,33 @@
+name: DB 깨우기 (Supabase 일시정지 막기)
+
+# 과제 공고 3장의 어려운 해결: 외부 예약 서비스로 매일 DB에 질의를 보낸다.
+#
+# cron 은 UTC 기준이다. "0 0 * * *" 은 한국 시각 매일 오전 9시다.
+# 손으로 바로 돌려 보려면 Actions 탭에서 Run workflow 를 누른다.
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping-db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 저장소 가져오기
+        uses: actions/checkout@v4
+
+      - name: 파이썬 준비
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: DB 드라이버 설치
+        run: pip install --quiet "psycopg[binary]==3.3.6"
+
+      - name: DB에 질의 보내기
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python .github/scripts/db_keepalive.py

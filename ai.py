@@ -27,17 +27,28 @@ ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 # 세 모델 모두 응답을 받아 확인했다. 공급자가 서로 달라서,
 # 한 공급자가 막혀도 다음 모델로 넘어갈 수 있다.
 #
-# 쓸 수 있는 다른 무료 모델(예비):
-#   nvidia/nemotron-3-ultra-550b-a55b:free   - 배정안을 냈지만 104초가 걸렸음
+# 순서는 tf_ai_logs 에 쌓인 실제 성공률로 정했다 (2026-10-23 KST 기준).
+#
+#   모델                                        호출  성공  성공률  성공 평균
+#   nvidia/nemotron-3-ultra-550b-a55b:free       1    1   100%   104.0초
+#   dots-studio/dots-3-note-preview:free         2    1    50%    62.5초
+#   poolside/laguna-s-2.1:free                   4    1    25%    40.4초
+#   nvidia/nemotron-3.5-lightning:free           5    0     0%    -      <- 뺐음
+#
+# 1차는 성공률이 가장 높은 1번을 쓴다. 다만 104초가 걸려 120초 제한에 가깝다.
+# 세 모델이 모두 120초를 다 쓰더라도 360초라서 10분 제한(감점 18번) 안에 든다.
+#
+# 뺀 모델: nvidia/nemotron-3.5-lightning:free
+#   5번 불러 한 번도 성공하지 못했다. 빈 응답 3번, 배정안 검사 실패 2번.
 #
 # 쓸 수 없던 모델(기록용):
 #   nvidia/nemotron-3-super-120b-a12b:free   - HTTP 404
 #   google/gemma-4-31b-it:free               - HTTP 429 (공급자 한도)
 #   thinkingmachines/inkling-small:free      - HTTP 403 (agentic harness 전용)
 MODELS = (
-    "nvidia/nemotron-3.5-lightning:free",
-    "poolside/laguna-s-2.1:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
     "dots-studio/dots-3-note-preview:free",
+    "poolside/laguna-s-2.1:free",
 )
 
 # 모델 하나에 허용하는 전체 시간 (초)
