@@ -379,7 +379,13 @@ def _now_text():
 
 
 def my_votes_on_team(me):
-    """내 팀의 대기 지원에 내가 어떻게 투표했는지. {지원자 학번: '찬성'|'거부'}"""
+    """내 팀의 **대기 중인** 지원에 내가 어떻게 투표했는지.
+
+    돌려주는 값: {지원자 학번: '찬성'|'거부'}
+
+    상태를 거르지 않으면, 거절된 학생이 같은 팀에 다시 지원했을 때 예전 지원에
+    한 투표가 섞여 들어와 새 지원의 찬성·거부 단추가 사라진다.
+    """
     team = my_team(me["id"])
     if team is None:
         return {}
@@ -389,8 +395,8 @@ def my_votes_on_team(me):
           from tf_votes v
           join tf_applications a on a.id = v.application_id
           join tf_students s on s.id = a.student_id
-         where v.voter_id = %s and a.team_id = %s
+         where v.voter_id = %s and a.team_id = %s and a.status = %s
         """,
-        (me["id"], team["id"]),
+        (me["id"], team["id"], STATUS_PENDING),
     )
     return {r["student_no"]: r["vote"] for r in rows}

@@ -12,7 +12,9 @@
 - API 키는 읽기만 하고 화면·기록·예외 메시지에 넣지 않는다 (감점 8번, -3점).
 """
 
+import concurrent.futures
 import json
+import os
 import time
 
 import requests
@@ -61,9 +63,8 @@ PER_MODEL_TIMEOUT = 120
 # 응답 길이 한도를 넉넉히 준다 (추론에 다 써서 빈 응답이 나오는 일을 줄임)
 MAX_TOKENS = 8000
 
-# 연결과 읽기가 멈춰 있을 때의 한도 (초)
+# 연결이 맺어지기를 기다리는 한도 (초)
 CONNECT_TIMEOUT = 15
-READ_TIMEOUT = 60
 
 # tf_ai_logs.outcome 에 쓰는 값
 OUTCOME_OK = "성공"
@@ -83,6 +84,21 @@ class AiFailure(Exception):
         super().__init__(reason)
         self.outcome = outcome
         self.reason = reason
+
+
+def models():
+    """쓸 모델 목록.
+
+    평소에는 위의 MODELS 를 쓴다. 환경변수 TF_AI_MODELS 가 있으면 그것을 쓴다.
+    실패 처리(2차·3차로 넘어감, 앱 자체 배정)가 동작하는지 시험할 때,
+    없는 모델 이름을 넣어 무료 모델 하루 한도를 쓰지 않고 확인하기 위한 것이다.
+    채점에는 쓰지 않는다. 시나리오나 학생 이름과는 아무 상관이 없다.
+    """
+    raw = (os.environ.get("TF_AI_MODELS") or "").strip()
+    if not raw:
+        return MODELS
+    picked = tuple(name.strip() for name in raw.split(",") if name.strip())
+    return picked or MODELS
 
 
 def has_key():
@@ -124,32 +140,33 @@ def call_model(model, prompt, time_left=None):
     def elapsed_ms():
         return int((time.monotonic() - start) * 1000)
 
-    try:
+    # 부른 때부터 응답을 다 받을 때까지 **전체** budget 초를 잰다 (공고 3장).
+    #
+    # requests 의 timeout 은 "멈춰 있는 시간"만 재기 때문에, 그것만으로는
+    # 전체 시간을 못 막는다. 응답이 천천히 계속 오면 얼마든지 길어지고,
+    # 마지막 조각을 받은 뒤 읽기 제한만큼 더 기다릴 수도 있다.
+    # 그래서 주고받는 일 전체를 딴 갈래(스레드)에 맡기고, 여기서 시간을 재다가
+    # budget 이 지나면 연결을 닫아 끊는다. 어떤 경우에도 budget 을 넘지 않는다.
+    holder = {}
+
+    def fetch():
         response = requests.post(
             ENDPOINT,
             headers=headers,
             json=body,
             stream=True,
-            timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+            # 소켓 제한도 budget 으로 둔다. 이보다 먼저 끊으면,
+            # 늦게라도 답했을 모델을 괜히 버리게 된다.
+            timeout=(CONNECT_TIMEOUT, budget),
         )
-    except requests.Timeout:
-        raise AiFailure(OUTCOME_TIMEOUT, f"{budget}초 안에 응답이 시작되지 않음")
-    except requests.RequestException:
-        # 예외 메시지에 키가 들어 있을 수 있어 원문을 쓰지 않는다.
-        raise AiFailure(OUTCOME_ERROR, "연결하지 못함")
-
-    try:
-        if response.status_code == 429:
-            raise AiFailure(OUTCOME_ERROR, "HTTP 429 (사용량 한도)")
-        if response.status_code >= 400:
-            raise AiFailure(OUTCOME_ERROR, f"HTTP {response.status_code}")
-
-        # 응답을 조금씩 받으면서 전체 시간을 센다.
-        # requests 의 timeout 은 "멈춰 있는 시간"만 재기 때문에,
-        # 응답이 천천히 계속 오면 120초를 넘길 수 있다 (공고 3장).
-        chunks = []
-        size = 0
+        holder["response"] = response
         try:
+            if response.status_code == 429:
+                raise AiFailure(OUTCOME_ERROR, "HTTP 429 (사용량 한도)")
+            if response.status_code >= 400:
+                raise AiFailure(OUTCOME_ERROR, f"HTTP {response.status_code}")
+
+            chunks = []
             for chunk in response.iter_content(chunk_size=8192):
                 if time.monotonic() - start > budget:
                     raise AiFailure(
@@ -157,15 +174,35 @@ def call_model(model, prompt, time_left=None):
                     )
                 if chunk:
                     chunks.append(chunk)
-                    size += len(chunk)
-        except requests.Timeout:
-            raise AiFailure(OUTCOME_TIMEOUT, f"{budget}초 안에 응답이 끝나지 않음")
-        except requests.RequestException:
-            raise AiFailure(OUTCOME_ERROR, "응답을 받다가 끊김")
-    finally:
-        response.close()
+            return b"".join(chunks)
+        finally:
+            try:
+                response.close()
+            except Exception:
+                pass
 
-    raw = b"".join(chunks)
+    worker = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = worker.submit(fetch)
+    try:
+        raw = future.result(timeout=budget)
+    except concurrent.futures.TimeoutError:
+        # 시간이 다 됐다. 연결을 닫아 기다리던 갈래를 깨운다.
+        response = holder.get("response")
+        if response is not None:
+            try:
+                response.close()
+            except Exception:
+                pass
+        raise AiFailure(OUTCOME_TIMEOUT, f"{budget}초가 지나 끊음")
+    except requests.Timeout:
+        raise AiFailure(OUTCOME_TIMEOUT, f"{budget}초 안에 응답이 끝나지 않음")
+    except requests.RequestException:
+        # 예외 메시지에 키가 들어 있을 수 있어 원문을 쓰지 않는다.
+        raise AiFailure(OUTCOME_ERROR, "연결하지 못함")
+    finally:
+        # 기다리지 않고 바로 넘어간다. 남은 갈래는 연결이 닫히면 저절로 끝난다.
+        worker.shutdown(wait=False)
+
     if not raw:
         raise AiFailure(OUTCOME_EMPTY, "응답이 비어 있음")
 

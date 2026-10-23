@@ -37,6 +37,10 @@ ADMIN_STUDENT_NO = "admin"
 # 채점 프로그램은 단추가 나타나기를 7초까지 기다린다 (공고 2.7절).
 WAIT_FOR_BUTTON_MS = 8000
 
+# 배포한 앱은 12시간 방문이 없으면 잠든다. 깨우는 데 시간이 걸리므로
+# 첫 화면을 기다리는 시간은 넉넉히 둔다 (--login-timeout 으로 바꿀 수 있다).
+LOGIN_TIMEOUT_MS = 240000
+
 RESULT = ".st-key-result"
 WHOAMI = ".st-key-whoami"
 STATUS_WIDGET = '[data-testid="stStatusWidget"]'
@@ -73,12 +77,12 @@ def read_env_value(name):
 def wait_idle(page, timeout_ms=45000):
     """앱이 다시 그리기를 끝낼 때까지 기다린다."""
     try:
-        page.wait_for_selector(STATUS_WIDGET, timeout=2500)
+        app_frame(page).wait_for_selector(STATUS_WIDGET, timeout=2500)
     except PlaywrightTimeout:
         pass
     deadline = time.monotonic() + timeout_ms / 1000
     while time.monotonic() < deadline:
-        if page.query_selector(STATUS_WIDGET) is None:
+        if app_frame(page).query_selector(STATUS_WIDGET) is None:
             break
         page.wait_for_timeout(300)
     page.wait_for_timeout(500)
@@ -91,20 +95,70 @@ def first_word(text):
     return text.split(":")[0].strip().split()[0] if text.split(":")[0].strip() else "(빈 안내)"
 
 
+def app_frame(page):
+    """앱이 그려지는 프레임을 돌려준다.
+
+    배포한 앱(Streamlit Community Cloud)은 앱 화면을 **iframe 안**(`/~/+/`)에
+    그린다. 그래서 바깥 문서만 보면 2.7절의 key 를 하나도 찾을 수 없다.
+    로컬에서 돌릴 때는 iframe 이 없어서 바깥 문서가 곧 앱 화면이다.
+    두 경우를 모두 다루려고, 앱이 들어 있는 프레임을 찾아서 쓴다.
+    """
+    cached = getattr(page, "_tf_app_frame", None)
+    if cached is not None:
+        try:
+            if not cached.is_detached():
+                return cached
+        except Exception:
+            pass
+
+    deadline = time.monotonic() + LOGIN_TIMEOUT_MS / 1000
+    while time.monotonic() < deadline:
+        for frame in page.frames:
+            try:
+                found = frame.query_selector('[data-testid="stApp"]') or frame.query_selector(
+                    '[class*="st-key-"]'
+                )
+            except Exception:
+                continue
+            if found:
+                page._tf_app_frame = frame
+                return frame
+        page.wait_for_timeout(500)
+    return page.main_frame
+
+
 def read_result(page):
-    element = page.query_selector(RESULT)
+    element = app_frame(page).query_selector(RESULT)
     return element.inner_text().strip() if element else ""
+
+
+def wake_if_sleeping(page):
+    """배포한 앱이 잠들어 있으면 깨운다.
+
+    공고 4.4절: 잠든 앱은 로그인하지 않은 사람도 깨울 수 있다.
+    Streamlit 이 "Yes, get this app back up!" 단추를 보여 준다.
+    """
+    try:
+        button = page.get_by_text("get this app back up", exact=False).first
+        if button.count() and button.is_visible(timeout=3000):
+            button.click(timeout=10000)
+            page.wait_for_timeout(5000)
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def login(context, app_url, student_no, password):
     page = context.new_page()
-    page.goto(app_url, wait_until="domcontentloaded")
-    page.wait_for_selector(".st-key-login_submit button", timeout=90000)
-    page.fill(".st-key-login_student_no input", student_no)
-    page.fill(".st-key-login_password input", password)
-    page.click(".st-key-login_submit button")
+    page.goto(app_url, wait_until="domcontentloaded", timeout=LOGIN_TIMEOUT_MS)
+    wake_if_sleeping(page)
+    app_frame(page).wait_for_selector(".st-key-login_submit button", timeout=LOGIN_TIMEOUT_MS)
+    app_frame(page).fill(".st-key-login_student_no input", student_no)
+    app_frame(page).fill(".st-key-login_password input", password)
+    app_frame(page).click(".st-key-login_submit button")
     wait_idle(page)
-    page.wait_for_selector(WHOAMI, timeout=30000)
+    app_frame(page).wait_for_selector(WHOAMI, timeout=30000)
     text = read_result(page)
     if not text.startswith("승인"):
         raise RuntimeError(f"로그인 실패({student_no}): {text}")
@@ -120,7 +174,7 @@ def click_if_possible(page, selector):
     사라질 수 있다. 그래서 요소를 미리 붙잡지 않고 로케이터로 그때그때
     다시 찾게 한다. 한 번 실패하면 한 번 더 시도한다.
     """
-    locator = page.locator(selector).first
+    locator = app_frame(page).locator(selector).first
     try:
         locator.wait_for(state="visible", timeout=WAIT_FOR_BUTTON_MS)
     except PlaywrightTimeout:
@@ -145,7 +199,7 @@ def wait_quiet(page, timeout_ms=20000):
     """앱이 다시 그리고 있지 않은 순간을 기다린다."""
     deadline = time.monotonic() + timeout_ms / 1000
     while time.monotonic() < deadline:
-        if page.query_selector(STATUS_WIDGET) is None:
+        if app_frame(page).query_selector(STATUS_WIDGET) is None:
             return True
         page.wait_for_timeout(200)
     return False
@@ -173,7 +227,7 @@ def click_and_read(page, selector, idle_ms=45000, gone_selector=None, retry=True
             text = read_result(page)
             if text != before:
                 return first_word(text), text
-            if gone_selector and page.query_selector(gone_selector) is None:
+            if gone_selector and app_frame(page).query_selector(gone_selector) is None:
                 return first_word(text), text
             page.wait_for_timeout(700)
         if not retry or attempt == 2:
@@ -232,9 +286,9 @@ class Runner:
     # ---- 명단 올리기 ----
     def upload_roster(self, csv_path, team_count):
         page = self.page_for(ADMIN_STUDENT_NO)
-        page.set_input_files(".st-key-admin_roster_file input[type=file]", str(csv_path))
+        app_frame(page).set_input_files(".st-key-admin_roster_file input[type=file]", str(csv_path))
         wait_idle(page)
-        page.fill(".st-key-admin_team_count input", str(team_count))
+        app_frame(page).fill(".st-key-admin_team_count input", str(team_count))
         page.keyboard.press("Enter")
         wait_idle(page)
         if not click_if_possible(page, ".st-key-admin_start button"):
@@ -284,7 +338,7 @@ class Runner:
         )
         if word is None:
             return "막힘", "AI 배정 단추가 없거나 비활성"
-        status = page.query_selector(".st-key-assign_status")
+        status = app_frame(page).query_selector(".st-key-assign_status")
         detail = status.inner_text().strip().replace("\n", " / ") if status else ""
         return word, f"{text}  [진행: {detail[:300]}]"
 
@@ -322,10 +376,10 @@ class Runner:
         wait_idle(page)
         # 팀이 없는 학생 표시는 자동 갱신 조각 안에 있어서 잠깐 늦게 나온다.
         try:
-            page.wait_for_selector(".st-key-unassigned", timeout=25000)
+            app_frame(page).wait_for_selector(".st-key-unassigned", timeout=25000)
         except PlaywrightTimeout:
             return None
-        element = page.query_selector(".st-key-unassigned")
+        element = app_frame(page).query_selector(".st-key-unassigned")
         if element is None:
             return None
         text = element.inner_text().strip()
@@ -343,12 +397,12 @@ class Runner:
         problems = []
         try:
             try:
-                page.wait_for_selector(".st-key-team_1", timeout=25000)
-                page.wait_for_selector(".st-key-unassigned", timeout=25000)
+                app_frame(page).wait_for_selector(".st-key-team_1", timeout=25000)
+                app_frame(page).wait_for_selector(".st-key-unassigned", timeout=25000)
             except PlaywrightTimeout:
                 problems.append("현황 표시가 제때 나타나지 않음")
             for team_no in range(1, team_count + 1):
-                element = page.query_selector(f".st-key-team_{team_no}")
+                element = app_frame(page).query_selector(f".st-key-team_{team_no}")
                 if element is None:
                     problems.append(f"팀{team_no} 표시를 찾을 수 없음")
                     continue
@@ -399,7 +453,7 @@ class Runner:
                         f"팀{team_no} 에 기획자와 웹 프로그래머를 서로 다른 학생이 맡을 수 없음"
                     )
 
-            left = page.query_selector(".st-key-unassigned")
+            left = app_frame(page).query_selector(".st-key-unassigned")
             left_text = left.inner_text().strip() if left else ""
             left_count = (
                 0
@@ -525,12 +579,25 @@ def print_table(title, rows, final_problems):
 def markdown_report(results, skip_ai):
     from datetime import datetime, timedelta, timezone
 
+    import os
+
     now = datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S")
+    override = (os.environ.get("TF_AI_MODELS") or "").strip()
+    if skip_ai:
+        ai_note = "건너뜀(--skip-ai)"
+    elif override:
+        ai_note = (
+            "없음 — 앱을 `TF_AI_MODELS` 로 **없는 모델 이름**으로 돌려서,"
+            " 3차까지 실패하고 앱이 스스로 배정하는 길을 확인했다"
+            f" (`{override}`)"
+        )
+    else:
+        ai_note = "실제로 호출함"
     out = [
         "# 연습 시나리오 자동 테스트 결과",
         "",
         f"- 실행 시각: {now} (KST)",
-        f"- AI 호출: {'건너뜀(--skip-ai)' if skip_ai else '실제로 호출함'}",
+        f"- 실제 AI 호출: {ai_note}",
         "- 실행 방법: `python tests/run_scenarios.py --all --out docs/테스트결과.md`",
         "- 채점 프로그램과 같은 방식으로 브라우저를 자동 조작하고, 화면 요소는"
         " 공고 2.7절의 Streamlit `key` 로만 찾았다.",

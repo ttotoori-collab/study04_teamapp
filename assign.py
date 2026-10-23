@@ -143,14 +143,46 @@ def solve(teams, unassigned):
 
 
 def why_impossible(teams, unassigned):
-    """규칙을 지키는 배정이 없는 이유 (공고 2.5절 8항)."""
+    """규칙을 지키는 배정이 없는 이유 (공고 2.5절 8항).
+
+    공고의 예시처럼 "팀3에 웹 프로그래머를 맡을 학생이 없음" 하고 콕 집어 준다.
+    팀이 꽉 찬 경우만 보지 않고, **그 팀에 들어갈 수 있는 학생까지 따져서** 본다.
+    들어갈 수 있는 학생은 팀이 없는 학생 중 주 역할이 겹치지 않는 사람이다.
+    """
     reasons = []
     for team in teams:
         members = team["members"]
-        if len(members) == db.TEAM_MAX and rules.unmet_required(members):
-            for role in db.REQUIRED_ROLES:
-                if not any(rules.can_take(m, role) for m in members):
-                    reasons.append(f"{team['name']}에 {role}를 맡을 학생이 없음")
+        free_slots = db.TEAM_MAX - len(members)
+
+        # 이 팀에 들어갈 수 있는 학생 (주 역할이 겹치면 못 들어간다)
+        if free_slots > 0:
+            candidates = [
+                s for s in unassigned if not rules.main_role_duplicated(members, s)
+            ]
+        else:
+            candidates = []
+        pool = list(members) + candidates
+
+        missing = [
+            role
+            for role in db.REQUIRED_ROLES
+            if not any(rules.can_take(person, role) for person in pool)
+        ]
+        for role in missing:
+            reasons.append(f"{team['name']}에 {role}를 맡을 학생이 없음")
+
+        if not missing:
+            planner, programmer = db.REQUIRED_ROLES
+            if rules.max_required_matching(pool) < len(db.REQUIRED_ROLES):
+                reasons.append(
+                    f"{team['name']}에 {planner}와 {programmer}를"
+                    " 서로 다른 학생이 맡을 수 없음"
+                )
+            elif free_slots < rules.unmet_required(members):
+                reasons.append(
+                    f"{team['name']}의 남은 자리 {free_slots}개로는"
+                    f" 못 채운 필수 포함 역할 {rules.unmet_required(members)}개를 채울 수 없음"
+                )
 
     need = sum(max(0, db.TEAM_MIN - len(t["members"])) for t in teams)
     if need > len(unassigned):
@@ -336,7 +368,7 @@ def run_assignment(me, on_progress=None, models=None):
     say("규칙을 지키는 배정이 있음. AI에게 배정안을 받는다")
 
     # 2. AI 에게 물어본다. 1차 → 2차 → 3차.
-    model_list = list(models if models is not None else ai.MODELS)
+    model_list = list(models if models is not None else ai.models())
     deadline = time.monotonic() + GLOBAL_DEADLINE
     prompt = build_prompt(teams, unassigned)
 
