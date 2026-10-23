@@ -55,7 +55,10 @@
 아래는 모두 연습 시나리오를 실제로 돌리다 생긴 **진짜 실패**다. `tf_ai_logs` 테이블에
 시각·차수·모델·결과·실패 이유가 남아 있고, 전체 표는
 [docs/작업기록.md](docs/작업기록.md) 의 "진짜 AI 실패" 절에 있다.
-화면: [img/admin-full.png](img/admin-full.png) (관리자 "현황" 의 AI 호출 기록 표)
+
+**화면: [img/ai-call-log-with-title.png](img/ai-call-log-with-title.png)**
+— 관리자 "현황" 의 AI 호출 기록 표. 아래 사례들이 그대로 보인다
+(시간초과 3건, 빈 응답, 검사 실패 83.8초, "AI가 3차까지 실패해 앱이 스스로 배정함").
 
 **사례 1 — 1차 모델의 배정안이 규칙 검사에서 걸러짐** (2026-10-23 15:55:03 KST)
 
@@ -184,7 +187,9 @@ line 224` 가 화면에 그대로 나왔다. 채점 중에 이러면 채점 프�
 
 | 파일 | 내용 |
 | --- | --- |
-| [img/admin-full.png](img/admin-full.png) | 관리자 화면 전체 (명단 올리기 / 마감과 배정 / 현황 3분할, AI 호출 기록 표) |
+| [img/ai-call-log-with-title.png](img/ai-call-log-with-title.png) | **AI 호출 기록 표** — 시각(한국 시각)·차수·모델 이름·결과·실패 이유·걸린 시간 |
+| [img/ai-call-log.png](img/ai-call-log.png) | 같은 표만 따로 (제목 없이) |
+| [img/admin-full.png](img/admin-full.png) | 관리자 화면 전체 (명단 올리기 / 마감과 배정 / 현황 3분할) |
 | [img/teams-confirmed.png](img/teams-confirmed.png) | 확정된 팀 구성 (팀원 이름과 주·보조 역할) |
 | [img/unassigned-empty.png](img/unassigned-empty.png) | 확정 뒤 "팀이 없는 학생" 이 비어 있음 |
 | [img/assign-status.png](img/assign-status.png) | 배정 진행 안내 영역 (새 세션이라 비어 있는 상태) |
