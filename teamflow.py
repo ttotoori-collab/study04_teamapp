@@ -305,6 +305,70 @@ def resolve_application(application_id):
     return f"승인: {app['team_name']} 팀원이 됨"
 
 
+def unassigned_students():
+    """팀이 없는 학생 (공고 2.5절 2항). 관리자는 빼고 센다."""
+    rows = db.query_all(
+        """
+        select s.id, s.student_no, s.name, s.main_role
+          from tf_students s
+          left join tf_members m on m.student_id = s.id
+         where s.is_admin = false and m.student_id is null
+         order by s.student_no
+        """
+    )
+    return _attach_sub_roles(rows)
+
+
+def close_recruiting(me):
+    """모집을 마감한다 (공고 2.5절 1~2항).
+
+    1. 그 뒤로는 지원과 투표를 할 수 없다.
+    2. 대기 중인 지원은 거절된다.
+    3. 1명뿐인 팀의 학생은 팀에서 빠져 "팀이 없는 학생"이 된다.
+    """
+    import auth  # 순환 수입을 피하려고 여기서 들여온다
+
+    auth.require_admin(me)
+
+    if db.is_recruiting_closed():
+        return "막힘: 이미 마감됨"
+
+    with db.transaction():
+        db.set_setting("closed", "true")
+        db.set_setting("closed_at", _now_text())
+
+        rejected = db.execute(
+            """
+            update tf_applications
+               set status = %s, reason = %s, resolved_at = now()
+             where status = %s
+            """,
+            (STATUS_REJECTED, "모집 마감", STATUS_PENDING),
+        )
+
+        removed = db.execute(
+            """
+            delete from tf_members
+             where team_id in (
+                   select team_id from tf_members
+                    group by team_id having count(*) = 1
+             )
+            """
+        )
+
+    return (
+        f"승인: 모집을 마감함 (대기 지원 {rejected}건 거절, "
+        f"1명뿐인 팀에서 {removed}명 빠짐)"
+    )
+
+
+def _now_text():
+    """지금 시각을 한국 시각 글자로."""
+    from datetime import datetime, timedelta, timezone
+
+    return datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def my_votes_on_team(me):
     """내 팀의 대기 지원에 내가 어떻게 투표했는지. {지원자 학번: '찬성'|'거부'}"""
     team = my_team(me["id"])

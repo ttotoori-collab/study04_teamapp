@@ -288,12 +288,34 @@ def render_admin(me):
 
     # ---- 2. 마감과 배정 ----
     st.markdown("### 2. 마감과 배정")
-    st.caption("다음 단계에서 만든다.")
+    closed = db.is_recruiting_closed()
+    if closed:
+        st.caption(f"모집이 마감됨 ({db.get_setting('closed_at', '')})")
+    if st.button("모집 마감", key="admin_close", disabled=closed):
+        run_action(teamflow.close_recruiting, me)
+    st.caption("AI 배정은 다음 단계에서 만든다.")
 
     # ---- 3. 현황 ----
     st.markdown("### 3. 현황")
     render_teams(me)
+    render_unassigned()
     render_pending_overview()
+
+
+def render_unassigned():
+    """팀이 없는 학생 (key = unassigned).
+
+    마감 때 대기 지원이 거절되고 1명뿐인 팀의 학생이 빠진 결과를
+    채점 프로그램이 이것으로 확인한다. 이름이 보여야 한다 (공고 2.7절).
+    """
+    students = teamflow.unassigned_students()
+    st.markdown("#### 팀이 없는 학생")
+    with st.container(key="unassigned", border=True):
+        if not students:
+            st.write("없음")
+        else:
+            for s in students:
+                st.write(describe_person(s["name"], s["main_role"], s["sub_roles"]))
 
 
 def render_pending_overview():
