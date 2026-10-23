@@ -82,7 +82,20 @@ def run_action(func, *args, **kwargs):
     except Exception:
         traceback.print_exc()
         set_result("막힘: 처리하지 못함")
-    st.rerun()
+    _rerun_all()
+
+
+def _rerun_all():
+    """화면 전체를 다시 그린다.
+
+    단추가 자동 갱신 조각(fragment) 안에 있을 수도 있으므로, 조각만 다시
+    그리지 않도록 scope="app" 을 준다. 그래야 result 같은 바깥 영역도 바뀐다.
+    """
+    try:
+        st.rerun(scope="app")
+    except TypeError:
+        # 오래된 Streamlit 에서는 scope 를 받지 않는다
+        st.rerun()
 
 
 # ------------------------------------------------------------
@@ -248,9 +261,24 @@ def render_votes(me):
 # 학생 화면
 # ------------------------------------------------------------
 
+AUTO_REFRESH_SECONDS = 5
+
+
 def render_student(me):
     st.subheader("학생 화면")
+    student_live(me)
 
+
+@st.fragment(run_every=AUTO_REFRESH_SECONDS)
+def student_live(me):
+    """다른 사람의 변경 보기 - 어려운 해결 (3장, 1점).
+
+    st.fragment 로 이 부분만 5초마다 다시 그린다. 새로 고침 단추를 누르지
+    않아도 다른 학생의 지원·투표가 화면에 나타난다.
+
+    바뀌는 부분(팀 목록, 지원 현황)만 조각에 넣는다. 입력칸이나 파일
+    업로더까지 다시 그리면 입력 중인 값이 날아간다.
+    """
     pending = teamflow.my_pending_application(me["id"])
     if pending is not None:
         st.info(f"내 지원: {pending['name']} (대기)")
@@ -304,6 +332,12 @@ def render_admin(me):
 
     # ---- 3. 현황 ----
     st.markdown("### 3. 현황")
+    admin_live(me)
+
+
+@st.fragment(run_every=AUTO_REFRESH_SECONDS)
+def admin_live(me):
+    """관리자 현황도 5초마다 다시 그린다 (읽기만 하는 부분)."""
     render_teams(me)
     render_unassigned()
     render_pending_overview()
@@ -461,6 +495,7 @@ def main():
     startup()
 
     st.title("팀 편성")
+    st.caption(f"화면은 {AUTO_REFRESH_SECONDS}초마다 저절로 바뀜")
 
     render_whoami()
     render_result()

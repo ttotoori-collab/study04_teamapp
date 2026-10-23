@@ -148,7 +148,7 @@ def _place_member(team_id, student_id):
             # 넣기를 저장점(savepoint) 안에서 한다.
             # 이렇게 해야 자리가 겹쳐 실패해도 그 시도만 되돌려지고,
             # 바깥 묶음 처리(배정 확정 등)가 함께 중단되지 않는다.
-            with db.get_conn().transaction():
+            with db.transaction():
                 db.execute(
                     "insert into tf_members (team_id, slot_no, student_id)"
                     " values (%s, %s, %s)",

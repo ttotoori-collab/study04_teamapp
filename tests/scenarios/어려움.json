@@ -1,0 +1,127 @@
+{
+  "title": "부록 3. 어려움",
+  "csv": "data/어려움.csv",
+  "team_count": 4,
+  "steps": [
+    {
+      "no": 1,
+      "what": "학생1→팀1 지원",
+      "expect": "승인",
+      "actions": [{"type": "apply", "who": "2026301", "team": 1}]
+    },
+    {
+      "no": 2,
+      "what": "학생4→팀1 지원, 학생1 찬성",
+      "expect": "승인",
+      "actions": [
+        {"type": "apply", "who": "2026304", "team": 1, "expect": "대기"},
+        {"type": "vote", "who": "2026301", "applicant": "2026304", "agree": true}
+      ]
+    },
+    {
+      "no": 3,
+      "what": "학생7→팀1 지원, 학생1·학생4 찬성",
+      "expect": "승인",
+      "actions": [
+        {"type": "apply", "who": "2026307", "team": 1, "expect": "대기"},
+        {"type": "vote", "who": "2026301", "applicant": "2026307", "agree": true, "expect": "대기"},
+        {"type": "vote", "who": "2026304", "applicant": "2026307", "agree": true}
+      ]
+    },
+    {
+      "no": 4,
+      "what": "학생2→팀2 지원",
+      "expect": "승인",
+      "actions": [{"type": "apply", "who": "2026302", "team": 2}]
+    },
+    {
+      "no": 5,
+      "what": "학생8→팀2 지원, 학생2 찬성",
+      "expect": "승인",
+      "actions": [
+        {"type": "apply", "who": "2026308", "team": 2, "expect": "대기"},
+        {"type": "vote", "who": "2026302", "applicant": "2026308", "agree": true}
+      ]
+    },
+    {
+      "no": 6,
+      "what": "학생5·학생6이 차례로 팀2에 지원",
+      "expect": "대기",
+      "actions": [
+        {"type": "apply", "who": "2026305", "team": 2, "expect": "대기"},
+        {"type": "apply", "who": "2026306", "team": 2, "expect": "대기"}
+      ]
+    },
+    {
+      "no": 7,
+      "what": "학생2·학생8이 학생5에 찬성",
+      "expect": "승인",
+      "actions": [
+        {"type": "vote", "who": "2026302", "applicant": "2026305", "agree": true, "expect": "대기"},
+        {"type": "vote", "who": "2026308", "applicant": "2026305", "agree": true}
+      ]
+    },
+    {
+      "no": 8,
+      "what": "학생2·학생8·학생5가 학생6에 찬성 (승인 직전 검사)",
+      "expect": "거절",
+      "actions": [
+        {"type": "vote", "who": "2026302", "applicant": "2026306", "agree": true, "expect": "대기"},
+        {"type": "vote", "who": "2026308", "applicant": "2026306", "agree": true, "expect": "대기"},
+        {"type": "vote", "who": "2026305", "applicant": "2026306", "agree": true}
+      ]
+    },
+    {
+      "no": 9,
+      "what": "학생11→팀3 지원",
+      "expect": "승인",
+      "actions": [{"type": "apply", "who": "2026311", "team": 3}]
+    },
+    {
+      "no": 10,
+      "what": "학생15→팀3 지원, 학생11 찬성",
+      "expect": "승인",
+      "actions": [
+        {"type": "apply", "who": "2026315", "team": 3, "expect": "대기"},
+        {"type": "vote", "who": "2026311", "applicant": "2026315", "agree": true}
+      ]
+    },
+    {
+      "no": 11,
+      "what": "학생14→팀3 지원 (필수 포함 역할 자리)",
+      "expect": "막힘",
+      "actions": [{"type": "apply", "who": "2026314", "team": 3}]
+    },
+    {
+      "no": 12,
+      "what": "학생10→팀4 지원",
+      "expect": "승인",
+      "actions": [{"type": "apply", "who": "2026310", "team": 4}]
+    },
+    {
+      "no": 13,
+      "what": "학생13→팀1 지원, 학생1만 찬성",
+      "expect": "대기",
+      "actions": [
+        {"type": "apply", "who": "2026313", "team": 1, "expect": "대기"},
+        {"type": "vote", "who": "2026301", "applicant": "2026313", "agree": true}
+      ]
+    },
+    {
+      "no": 14,
+      "what": "관리자가 마감",
+      "expect": "승인",
+      "actions": [{"type": "close"}],
+      "after": {"unassigned_count": 8}
+    },
+    {
+      "no": 15,
+      "what": "관리자가 배정, 확정",
+      "expect": "승인",
+      "actions": [
+        {"type": "assign", "expect": "승인"},
+        {"type": "confirm", "expect": "승인"}
+      ]
+    }
+  ]
+}

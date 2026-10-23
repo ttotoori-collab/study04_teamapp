@@ -1,0 +1,93 @@
+{
+  "title": "부록 2. 중간",
+  "csv": "data/중간.csv",
+  "team_count": 4,
+  "steps": [
+    {
+      "no": 1,
+      "what": "학생1→팀1 지원",
+      "expect": "승인",
+      "actions": [{"type": "apply", "who": "2026201", "team": 1}]
+    },
+    {
+      "no": 2,
+      "what": "학생5→팀1 지원, 학생1 찬성",
+      "expect": "승인",
+      "actions": [
+        {"type": "apply", "who": "2026205", "team": 1, "expect": "대기"},
+        {"type": "vote", "who": "2026201", "applicant": "2026205", "agree": true}
+      ]
+    },
+    {
+      "no": 3,
+      "what": "학생2→팀1 지원 (주 역할 중복)",
+      "expect": "막힘",
+      "actions": [{"type": "apply", "who": "2026202", "team": 1}]
+    },
+    {
+      "no": 4,
+      "what": "학생6→팀2 지원",
+      "expect": "승인",
+      "actions": [{"type": "apply", "who": "2026206", "team": 2}]
+    },
+    {
+      "no": 5,
+      "what": "학생9→팀2 지원, 학생6 찬성",
+      "expect": "승인",
+      "actions": [
+        {"type": "apply", "who": "2026209", "team": 2, "expect": "대기"},
+        {"type": "vote", "who": "2026206", "applicant": "2026209", "agree": true}
+      ]
+    },
+    {
+      "no": 6,
+      "what": "학생10→팀2 지원, 학생6 찬성, 학생9 거부",
+      "expect": "거절",
+      "actions": [
+        {"type": "apply", "who": "2026210", "team": 2, "expect": "대기"},
+        {"type": "vote", "who": "2026206", "applicant": "2026210", "agree": true, "expect": "대기"},
+        {"type": "vote", "who": "2026209", "applicant": "2026210", "agree": false}
+      ]
+    },
+    {
+      "no": 7,
+      "what": "학생3→팀3, 학생11→팀4 지원",
+      "expect": "승인",
+      "actions": [
+        {"type": "apply", "who": "2026203", "team": 3},
+        {"type": "apply", "who": "2026211", "team": 4}
+      ]
+    },
+    {
+      "no": 8,
+      "what": "학생12→팀4 지원, 이어서 팀3에도 지원",
+      "expect": "막힘",
+      "actions": [
+        {"type": "apply", "who": "2026212", "team": 4, "expect": "대기"},
+        {"type": "apply", "who": "2026212", "team": 3}
+      ]
+    },
+    {
+      "no": 9,
+      "what": "관리자가 마감",
+      "expect": "승인",
+      "actions": [{"type": "close"}],
+      "after": {"unassigned_count": 8}
+    },
+    {
+      "no": 10,
+      "what": "학생2→팀3 지원 (마감)",
+      "expect": "막힘",
+      "actions": [{"type": "apply", "who": "2026202", "team": 3}]
+    },
+    {
+      "no": 11,
+      "what": "관리자가 배정, 확정",
+      "expect": "승인",
+      "actions": [
+        {"type": "assign", "expect": "승인"},
+        {"type": "confirm", "expect": "승인"}
+      ]
+    }
+  ]
+}

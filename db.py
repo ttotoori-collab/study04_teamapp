@@ -10,11 +10,14 @@
    어디에도 다시 내보내지 않는다.
 """
 
+import contextlib
 import os
+import threading
 from pathlib import Path
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 try:
     import streamlit as st
@@ -93,7 +96,24 @@ def has_secret(name):
 # 연결 (한 번만 만들고 다시 쓴다)
 # ------------------------------------------------------------
 
-def _new_connection():
+# 연결은 한 번만 만들어 두고 다시 쓴다 (과제 공고 4.2절).
+#
+# 다만 연결 "하나"를 모든 사용자가 함께 쓰면 안 된다. 앱 화면이 5초마다
+# 저절로 갱신되므로, 학생 16명이 동시에 접속하면 1초에 수십 번 질의가 몰린다.
+# 연결 하나로 그걸 받으면 질의가 줄을 서느라 화면이 몇 초씩 늦어지고,
+# 한 사람의 실패가 다른 사람의 묶음 처리까지 깨뜨린다.
+#
+# 그래서 연결 몇 개를 미리 만들어 두고 돌려 쓰는 "연결 풀" 을 쓴다.
+# 질의마다 새로 연결하는 것이 아니므로 공고가 경고한 느려짐은 생기지 않는다.
+POOL_MIN = 2
+POOL_MAX = 10
+
+# 한 묶음 처리(transaction) 안에서는 같은 연결을 계속 써야 한다.
+# 지금 이 작업 흐름이 빌려 쓰는 연결을 여기에 둔다.
+_local = threading.local()
+
+
+def _make_pool():
     url = secret("DATABASE_URL")
     if not url:
         # 메시지에 값을 넣지 않는다.
@@ -101,68 +121,96 @@ def _new_connection():
             "DATABASE_URL 이 없습니다. 로컬에서는 .env, 배포에서는 "
             "Streamlit Secrets 를 확인하세요."
         )
-    return psycopg.connect(
+    return ConnectionPool(
         url,
-        autocommit=True,
-        connect_timeout=20,
-        row_factory=dict_row,
+        min_size=POOL_MIN,
+        max_size=POOL_MAX,
+        timeout=30,
+        max_lifetime=1800,
+        # autocommit 으로 둔다. 질의 하나마다 묶음을 열고 닫으면
+        # 왕복이 세 배가 되어 화면이 느려진다.
+        # 여러 질의를 한 묶음으로 처리할 때는 db.transaction() 이 직접 연다.
+        kwargs={
+            "row_factory": dict_row,
+            "connect_timeout": 20,
+            "autocommit": True,
+        },
+        open=True,
     )
 
 
 if st is not None:
     @st.cache_resource(show_spinner=False)
-    def _get_cached_connection():
-        return _new_connection()
+    def _get_pool():
+        return _make_pool()
 
-    def _drop_cached_connection():
-        _get_cached_connection.clear()
+    def _drop_pool():
+        _get_pool.clear()
 
 else:
     _holder = {}
 
-    def _get_cached_connection():
-        conn = _holder.get("conn")
-        if conn is None or conn.closed:
-            conn = _new_connection()
-            _holder["conn"] = conn
-        return conn
+    def _get_pool():
+        pool = _holder.get("pool")
+        if pool is None:
+            pool = _make_pool()
+            _holder["pool"] = pool
+        return pool
 
-    def _drop_cached_connection():
-        conn = _holder.pop("conn", None)
-        if conn is not None and not conn.closed:
+    def _drop_pool():
+        pool = _holder.pop("pool", None)
+        if pool is not None:
             try:
-                conn.close()
-            except psycopg.Error:
+                pool.close()
+            except Exception:
                 pass
 
 
+@contextlib.contextmanager
+def borrow():
+    """연결 하나를 빌린다.
+
+    이미 묶음 처리 안이면 그 연결을 그대로 쓴다. 그래야 묶음이 쪼개지지 않는다.
+    """
+    existing = getattr(_local, "conn", None)
+    if existing is not None:
+        yield existing
+        return
+    with _get_pool().connection() as conn:
+        _local.conn = conn
+        try:
+            yield conn
+        finally:
+            _local.conn = None
+
+
 def get_conn():
-    """다시 쓰는 연결을 돌려준다."""
-    conn = _get_cached_connection()
-    if conn.closed:
-        _drop_cached_connection()
-        conn = _get_cached_connection()
-    return conn
+    """지금 빌려 쓰는 연결. 묶음 처리 안에서만 뜻이 있다."""
+    existing = getattr(_local, "conn", None)
+    if existing is not None:
+        return existing
+    raise RuntimeError("db.borrow() 또는 db.transaction() 안에서만 쓸 수 있습니다")
 
 
 def _run(sql, params, mode):
-    """질의를 실행한다. 연결이 끊겨 있으면 한 번만 다시 연결해 재시도한다."""
+    """질의를 실행한다. 연결이 끊겨 있으면 한 번만 다시 빌려 재시도한다."""
+    in_transaction = getattr(_local, "conn", None) is not None
     last_error = None
     for attempt in (1, 2):
-        conn = get_conn()
         try:
-            with conn.cursor() as cur:
-                cur.execute(sql, params)
-                if mode == "all":
-                    return cur.fetchall()
-                if mode == "one":
-                    return cur.fetchone()
-                return cur.rowcount
+            with borrow() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(sql, params)
+                    if mode == "all":
+                        return cur.fetchall()
+                    if mode == "one":
+                        return cur.fetchone()
+                    return cur.rowcount
         except psycopg.OperationalError as e:
             # 연결이 끊긴 경우에만 재시도한다. 제약 위반은 그대로 올려 보낸다.
+            # 묶음 처리 안이라면 되돌리지 않고 그대로 올려 보낸다.
             last_error = e
-            _drop_cached_connection()
-            if attempt == 2:
+            if in_transaction or attempt == 2:
                 raise
     raise last_error
 
@@ -190,20 +238,26 @@ def execute_many(sql, params_seq):
     params_seq = list(params_seq)
     if not params_seq:
         return 0
-    conn = get_conn()
-    with conn.cursor() as cur:
-        cur.executemany(sql, params_seq)
-        return cur.rowcount
+    with borrow() as conn:
+        with conn.cursor() as cur:
+            cur.executemany(sql, params_seq)
+            return cur.rowcount
 
 
+@contextlib.contextmanager
 def transaction():
     """여러 질의를 한 묶음으로 처리할 때 쓴다.
 
+    묶음이 끝날 때까지 같은 연결을 쓴다. 다른 사용자는 다른 연결을 쓰므로
+    서로 끼어들지 않는다.
+
     쓰는 법:
-        with db.transaction() as tx:
-            tx.execute(...)
+        with db.transaction():
+            db.execute(...)
     """
-    return get_conn().transaction()
+    with borrow() as conn:
+        with conn.transaction() as tx:
+            yield tx
 
 
 def ping():

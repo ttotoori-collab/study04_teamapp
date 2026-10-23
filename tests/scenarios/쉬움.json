@@ -1,0 +1,64 @@
+{
+  "title": "부록 1. 쉬움",
+  "csv": "data/쉬움.csv",
+  "team_count": 3,
+  "steps": [
+    {
+      "no": 1,
+      "what": "학생1→팀1, 학생2→팀2, 학생3→팀3 지원",
+      "expect": "승인",
+      "actions": [
+        {"type": "apply", "who": "2026101", "team": 1},
+        {"type": "apply", "who": "2026102", "team": 2},
+        {"type": "apply", "who": "2026103", "team": 3}
+      ]
+    },
+    {
+      "no": 2,
+      "what": "학생4→팀1 지원, 학생1 찬성",
+      "expect": "승인",
+      "actions": [
+        {"type": "apply", "who": "2026104", "team": 1, "expect": "대기"},
+        {"type": "vote", "who": "2026101", "applicant": "2026104", "agree": true}
+      ]
+    },
+    {
+      "no": 3,
+      "what": "학생5→팀2 지원, 학생2 찬성",
+      "expect": "승인",
+      "actions": [
+        {"type": "apply", "who": "2026105", "team": 2, "expect": "대기"},
+        {"type": "vote", "who": "2026102", "applicant": "2026105", "agree": true}
+      ]
+    },
+    {
+      "no": 4,
+      "what": "학생7→팀1 지원, 학생1 찬성, 학생4 거부",
+      "expect": "거절",
+      "actions": [
+        {"type": "apply", "who": "2026107", "team": 1, "expect": "대기"},
+        {"type": "vote", "who": "2026101", "applicant": "2026107", "agree": true, "expect": "대기"},
+        {"type": "vote", "who": "2026104", "applicant": "2026107", "agree": false}
+      ]
+    },
+    {
+      "no": 5,
+      "what": "학생6→팀3 지원, 학생3 찬성",
+      "expect": "승인",
+      "actions": [
+        {"type": "apply", "who": "2026106", "team": 3, "expect": "대기"},
+        {"type": "vote", "who": "2026103", "applicant": "2026106", "agree": true}
+      ]
+    },
+    {
+      "no": 6,
+      "what": "관리자가 마감하고 배정, 확정",
+      "expect": "승인",
+      "actions": [
+        {"type": "close", "expect": "승인"},
+        {"type": "assign", "expect": "승인"},
+        {"type": "confirm", "expect": "승인"}
+      ]
+    }
+  ]
+}
